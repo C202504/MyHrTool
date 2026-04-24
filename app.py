@@ -5,7 +5,7 @@ import pandas as pd
 
 # ==========================================
 # 版本標記 (Version Stamp)
-# 更新時間：2026-04-24 16:50
+# 更新時間：2026-04-24 17:30
 # ==========================================
 
 # 1. 歷年調薪基準大數據 (1999-2025)
@@ -47,6 +47,16 @@ FIRST_YEAR_H1_DATA = {
     2019: 1440, 2020: 0, 2021: 1650
 }
 
+# 廠區津貼對照表
+LOCATION_PAY_DATA = {
+    "台北": 4000, "麥寮": 2000, "五股": 1800, "林口": 1800, "工三": 1800,
+    "工五": 1800, "台北站": 1800, "三峽": 1800, "桃園": 1800, "泰山": 1800,
+    "球場": 1800, "楊梅": 1800, "樹林": 1800, "錦興": 1800, "觀音": 1800,
+    "林園": 500, "彰化": 500, "彰濱崙": 10000, "仁武": 0, "宜蘭": 0,
+    "龍德": 0, "新港": 0, "嘉義": 0, "台中": 0, "洲際": 0, "冬山": 0,
+    "東勢": 0, "高雄": 0, "大發": 0, "屏南": 0, "台南": 0, "梧棲": 0
+}
+
 st.set_page_config(page_title="特簽人員核薪試算系統", page_icon="📝", layout="wide")
 
 st.markdown("""<style>.notranslate { translate: no !important; } @media print { .stButton, .stDownloadButton, footer, header { display: none !important; } .stMain { padding: 0 !important; } }</style>""", unsafe_allow_html=True)
@@ -64,11 +74,12 @@ with st.container():
 4. 新進起薪：請自行針對個案狀況進行修改。
 5. 調薪基準：歷年1999-2025； 上半年到職1999-2021。
 6. 對應之職等、級與效獎基數請自行修改。
-7. 專業經歷支援民國年份輸入，輸入後會自動換算為西元。""")
+7. 專業經歷支援民國年份輸入，輸入後會自動換算為西元。
+8. 可以選擇上班地點""")
 
 st.divider()
 
-# --- 基本資料 ---
+# --- 第一部分：基本資料 ---
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -87,7 +98,7 @@ with st.container(border=True):
 
 st.divider()
 
-# --- 專業經歷 (民國/西元轉換邏輯) ---
+# --- 第二部分：專業經歷 (支援民國/西元切換) ---
 st.header("⏳ 專業經歷輸入")
 
 def roc_to_western_selector(label, key_prefix, default_date=None):
@@ -95,14 +106,10 @@ def roc_to_western_selector(label, key_prefix, default_date=None):
     if mode == "西元":
         return st.date_input(label, value=default_date if default_date else date.today(), min_value=date(1911,1,1), key=f"d_{key_prefix}")
     else:
-        # 民國輸入 UI
         c_y, c_m, c_d = st.columns(3)
-        with c_y: 
-            r_y = st.number_input("民國年", min_value=1, max_value=200, value=(default_date.year - 1911) if default_date else 100, key=f"ry_{key_prefix}")
-        with c_m: 
-            r_m = st.selectbox("月", range(1, 13), index=(default_date.month - 1) if default_date else 0, key=f"rm_{key_prefix}")
-        with c_d: 
-            r_d = st.selectbox("日", range(1, 32), index=(default_date.day - 1) if default_date else 0, key=f"rd_{key_prefix}")
+        with c_y: r_y = st.number_input("民國年", min_value=1, max_value=200, value=(default_date.year - 1911) if default_date else 100, key=f"ry_{key_prefix}")
+        with c_m: r_m = st.selectbox("月", range(1, 13), index=(default_date.month - 1) if default_date else 0, key=f"rm_{key_prefix}")
+        with c_d: r_d = st.selectbox("日", range(1, 32), index=(default_date.day - 1) if default_date else 0, key=f"rd_{key_prefix}")
         try:
             res_date = date(r_y + 1911, r_m, r_d)
             st.caption(f"📅 自動換算：西元 {res_date.strftime('%Y/%m/%d')}")
@@ -117,7 +124,6 @@ if st.button("➕ 新增一筆經歷"):
 
 total_days = 0
 global_error = False
-today_dt = date.today()
 
 for idx, exp in enumerate(st.session_state.exp_list):
     with st.container(border=True):
@@ -153,7 +159,7 @@ if total_days > 0 and not global_error:
 else:
     calc_years, entry_back = 0, None
 
-# --- 核薪試算 ---
+# --- 第三部分：核薪試算 ---
 if all([name.strip() != "", school.strip() != "", total_days > 0, not global_error]):
     st.divider()
     st.header(f"💹 歷年調薪與核定本薪")
@@ -184,13 +190,11 @@ if all([name.strip() != "", school.strip() != "", total_days > 0, not global_err
     c_s1, c_s2 = st.columns(2)
     with c_s1:
         with st.container(border=True):
-            st.write(f"基礎起薪(A): {symbol} {base_salary_origin:,}")
-            st.write(f"歷年調薪合計(B): {symbol} {total_adj:,}")
-            st.write(f"核給折數: {discount_rate}%")
-            st.info(f"系統建議本薪: **{symbol} {suggested:,}**")
+            st.write(f"基礎起薪(A): {symbol} {base_salary_origin:,}"); st.write(f"歷年調薪合計(B): {symbol} {total_adj:,}")
+            st.write(f"核給折數: {discount_rate}%"); st.info(f"系統建議本薪: **{symbol} {suggested:,}**")
     with c_s2: final_base = st.number_input(f"最終核給本薪 ({symbol})", value=int(suggested), step=100)
 
-    # --- 年薪試算 ---
+    # --- 第四部分：年薪試算 ---
     st.divider(); st.header("💰 年薪試算")
     is_lv1 = target_pos == "一級主管"
     p_label = "經營津貼" if is_lv1 else "效率獎金"
@@ -203,7 +207,12 @@ if all([name.strip() != "", school.strip() != "", total_days > 0, not global_err
 
     with st.container(border=True):
         st.subheader("📌 參數手動輸入")
-        i0, i1, i2, i3, i4 = st.columns(5)
+        # 修改：將「上班廠區」移動至第一個欄位
+        i_loc, i0, i1, i2, i3, i4 = st.columns([1.5, 1, 1, 1, 1, 1])
+        with i_loc: 
+            loc_choice = st.selectbox("上班廠區", options=list(LOCATION_PAY_DATA.keys()), index=0)
+            loc_pay = LOCATION_PAY_DATA[loc_choice]
+            loc_label = "作業用品代金" if loc_choice == "台北" else "地區津貼"
         with i0: st.text_input("職等、級", value="8.2")
         with i1: p_base = st.number_input("效獎基數", value=float(d_p_base), step=0.1)
         with i2: p_pay = st.number_input(f"每基數{p_label}", value=int(d_u_pay), step=100)
@@ -211,13 +220,13 @@ if all([name.strip() != "", school.strip() != "", total_days > 0, not global_err
         with i4: fest_val = st.number_input(b_label, value=int(d_bonus), step=1000)
         
         p_bonus_val = int(round(p_pay * p_base, 0))
-        mo_total = final_base + p_bonus_val + 2400 + 1430 + 4000
+        mo_total = final_base + p_bonus_val + 2400 + 1430 + loc_pay
         suggested_yr_total = (mo_total * 12) + final_base + int(round(final_base * yr_mo, 0)) + fest_val
 
         st.write("📊 **年薪構成明細表**")
         res_df = pd.DataFrame({
-            "項目": ["核給本薪", p_label, "伙食津貼", "交通津貼", "作業用品代金", "月薪合計", "勤勉獎金", "年終獎金", b_label, "預估年薪總計(核定)"],
-            "金額": [f"{symbol} {final_base:,}", f"{symbol} {p_bonus_val:,}", f"{symbol} 2,400", f"{symbol} 1,430", f"{symbol} 4,000", f"{symbol} {mo_total:,}", f"{symbol} {final_base:,}", f"{symbol} {int(round(final_base*yr_mo,0)):,}", f"{symbol} {fest_val:,}", f"{symbol} {int(round(suggested_yr_total,0)):,}"]
+            "項目": ["核給本薪", p_label, "伙食津貼", "交通津貼", loc_label, "月薪合計", "勤勉獎金", "年終獎金", b_label, "預估年薪總計(核定)"],
+            "金額": [f"{symbol} {final_base:,}", f"{symbol} {p_bonus_val:,}", f"{symbol} 2,400", f"{symbol} 1,430", f"{symbol} {loc_pay:,}", f"{symbol} {mo_total:,}", f"{symbol} {final_base:,}", f"{symbol} {int(round(final_base*yr_mo,0)):,}", f"{symbol} {fest_val:,}", f"{symbol} {int(round(suggested_yr_total,0)):,}"]
         })
         
         def draw(df):
