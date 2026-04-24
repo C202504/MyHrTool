@@ -5,7 +5,7 @@ import pandas as pd
 
 # ==========================================
 # 版本標記 (Version Stamp)
-# 更新時間：2026-04-24 16:15
+# 更新時間：2026-04-24 16:50
 # ==========================================
 
 # 1. 歷年調薪基準大數據 (1999-2025)
@@ -51,16 +51,20 @@ st.set_page_config(page_title="特簽人員核薪試算系統", page_icon="📝"
 
 st.markdown("""<style>.notranslate { translate: no !important; } @media print { .stButton, .stDownloadButton, footer, header { display: none !important; } .stMain { padding: 0 !important; } }</style>""", unsafe_allow_html=True)
 
-st.title("📝 特簽人員任用核薪試算系統 ")
+st.title("📝 特簽人員任用核薪試算系統")
 
+# ==========================================
+# 📢 重要注意事項標示區
+# ==========================================
 with st.container():
     st.info("""📢 **重要注意事項**：
-1. 版本-26.04.24.11。
+1. 版本-26.04.24.12。
 2. 目前尚無人民幣功能。
 3. 此為相關作業人員使用，請勿轉傳。
 4. 新進起薪：請自行針對個案狀況進行修改。
 5. 調薪基準：歷年1999-2025； 上半年到職1999-2021。
-6. 對應之職等、級與效獎基數請自行修改""")
+6. 對應之職等、級與效獎基數請自行修改。
+7. 專業經歷支援民國年份輸入，輸入後會自動換算為西元。""")
 
 st.divider()
 
@@ -83,9 +87,33 @@ with st.container(border=True):
 
 st.divider()
 
-# --- 專業經歷 ---
+# --- 專業經歷 (民國/西元轉換邏輯) ---
+st.header("⏳ 專業經歷輸入")
+
+def roc_to_western_selector(label, key_prefix, default_date=None):
+    mode = st.radio(f"{label} 格式", ["西元", "民國"], key=f"m_{key_prefix}", horizontal=True)
+    if mode == "西元":
+        return st.date_input(label, value=default_date if default_date else date.today(), min_value=date(1911,1,1), key=f"d_{key_prefix}")
+    else:
+        # 民國輸入 UI
+        c_y, c_m, c_d = st.columns(3)
+        with c_y: 
+            r_y = st.number_input("民國年", min_value=1, max_value=200, value=(default_date.year - 1911) if default_date else 100, key=f"ry_{key_prefix}")
+        with c_m: 
+            r_m = st.selectbox("月", range(1, 13), index=(default_date.month - 1) if default_date else 0, key=f"rm_{key_prefix}")
+        with c_d: 
+            r_d = st.selectbox("日", range(1, 32), index=(default_date.day - 1) if default_date else 0, key=f"rd_{key_prefix}")
+        try:
+            res_date = date(r_y + 1911, r_m, r_d)
+            st.caption(f"📅 自動換算：西元 {res_date.strftime('%Y/%m/%d')}")
+            return res_date
+        except ValueError:
+            st.error("日期無效")
+            return date.today()
+
 if 'exp_list' not in st.session_state: st.session_state.exp_list = []
-if st.button("➕ 新增一筆經歷"): st.session_state.exp_list.append({"label": "", "start": None, "end": None})
+if st.button("➕ 新增一筆經歷"): 
+    st.session_state.exp_list.append({"label": "", "start": date.today(), "end": date.today()})
 
 total_days = 0
 global_error = False
@@ -93,17 +121,25 @@ today_dt = date.today()
 
 for idx, exp in enumerate(st.session_state.exp_list):
     with st.container(border=True):
-        col_name, col_start, col_end, col_del = st.columns([3, 3, 3, 1])
-        with col_name: st.session_state.exp_list[idx]["label"] = st.text_input(f"經歷 {idx+1}", value=exp["label"], key=f"lab_{idx}")
-        with col_start: st.session_state.exp_list[idx]["start"] = st.date_input("起始日", value=exp["start"], min_value=date(1911,1,1), key=f"s_{idx}")
-        with col_end: st.session_state.exp_list[idx]["end"] = st.date_input("迄止日", value=exp["end"], min_value=date(1911,1,1), max_value=today_dt, key=f"e_{idx}")
-        if st.session_state.exp_list[idx]["start"] and st.session_state.exp_list[idx]["end"]:
-            if st.session_state.exp_list[idx]["end"] < st.session_state.exp_list[idx]["start"]:
-                st.error("迄止日不可早於起始日"); global_error = True
-            else: total_days += (st.session_state.exp_list[idx]["end"] - st.session_state.exp_list[idx]["start"]).days + 1
+        col_info, col_dates, col_del = st.columns([3, 6, 1])
+        with col_info: 
+            st.session_state.exp_list[idx]["label"] = st.text_input(f"經歷 {idx+1}", value=exp["label"], key=f"lab_{idx}")
+        with col_dates:
+            c1, c2 = st.columns(2)
+            with c1: 
+                s_date = roc_to_western_selector("起始日", f"s_{idx}", default_date=exp["start"])
+                st.session_state.exp_list[idx]["start"] = s_date
+            with c2: 
+                e_date = roc_to_western_selector("迄止日", f"e_{idx}", default_date=exp["end"])
+                st.session_state.exp_list[idx]["end"] = e_date
         with col_del: 
             st.write("##")
             if st.button("🗑️", key=f"del_{idx}"): st.session_state.exp_list.pop(idx); st.rerun()
+        
+        cs, ce = st.session_state.exp_list[idx]["start"], st.session_state.exp_list[idx]["end"]
+        if cs and ce:
+            if ce < cs: global_error = True; st.error("迄止日不可早於起始日")
+            else: total_days += (ce - cs).days + 1
 
 if total_days > 0 and not global_error:
     base_d = date(2000, 1, 1)
